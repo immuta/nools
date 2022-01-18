@@ -1,7 +1,7 @@
 {
   "name": "nools",
   "description": "A rules engine for node",
-  "version": "0.4.4",
+  "version": "0.4.4-immuta2",
   "bin": {
     "nools": "./bin/nools"
   },
@@ -31,8 +31,8 @@
     "arguments-extended": "~0.0.3",
     "leafy": "~0.0.3",
     "ht": "~0.0.2",
-    "commander": "~1.1.1",
-    "uglify-js": "~3.10.2"
+    "commander": "^1.1.1",
+    "uglify-js": "^3.14.3"
   },
   "devDependencies": {
     "coddoc": "0.0.3",
