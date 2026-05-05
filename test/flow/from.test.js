@@ -139,20 +139,20 @@ it.describe("from condition", function (it) {
 
     it.describe("with js source", function (it) {
 
-        var called = 0;
-
         function MyValue(n2) {
             this.value = n2;
         }
 
-        var flow = nools.flow("from flow js source", function (flow) {
+        // Pin the date fact and the from-clause source to the same value (avoids flake from re-evaluating daysFromNow).
+        var dateFact = dateExtended.daysFromNow(1);
+
+        function addFromJsSourceRules(flow) {
             flow.rule("from rule 1", [
                 [MyValue, "n1"],
                 [Number, "n2", "n1.value == n2", "from [1,2,3,4,5]"]
             ], function (facts) {
                 assert.equal(facts.n1.value, facts.n2);
                 assert.isTrue([1, 2, 3, 4, 5].indexOf(facts.n2) !== -1);
-                called++;
             });
 
             flow.rule("from rule 2", [
@@ -161,16 +161,20 @@ it.describe("from condition", function (it) {
             ], function (facts) {
                 assert.equal(facts.n1.value, facts.n2);
                 assert.isTrue(['a' , 'b', 'c', 'd', 'e', 'f'].indexOf(facts.n2) !== -1);
-                called++;
             });
 
-            flow.rule("from rule 3 with function", [
+            flow.rule("from rule 3 with function", {
+                scope: {
+                    daysFromNow: function () {
+                        return dateFact;
+                    }
+                }
+            }, [
                 [MyValue, "n1", "isDate(n1.value)"],
                 [Date, "n2", "dateCmp(n1.value, n2)", "from daysFromNow(1)"]
             ], function (facts) {
                 assert.isDate(facts.n1.value);
                 assert.isDate(facts.n2);
-                called++;
             });
 
             flow.rule("from rule 4 with scope function", {
@@ -185,12 +189,20 @@ it.describe("from condition", function (it) {
             ], function (facts) {
                 assert.equal(facts.n1.value, facts.n2);
                 assert.isTrue(["f", "g", "h", "i", "j"].indexOf(facts.n2) !== -1);
-                called++;
             });
+        }
+
+        var flow = nools.flow("from flow js source", addFromJsSourceRules);
+
+        // deleteFlows() removes global registration; put this flow back for getSession().
+        it.beforeEach(function () {
+            if (!nools.hasFlow("from flow js source")) {
+                flow = nools.flow("from flow js source", addFromJsSourceRules);
+            }
         });
 
         it.should("create the proper match contexts", function () {
-
+            var fireCount = 0;
             var session = flow.getSession(
                 new MyValue(1),
                 new MyValue(2),
@@ -202,16 +214,18 @@ it.describe("from condition", function (it) {
                 new MyValue('c'),
                 new MyValue('d'),
                 new MyValue('e'),
-                new MyValue(dateExtended.daysFromNow(1)),
+                new MyValue(dateFact),
                 new MyValue('f'),
                 new MyValue('g'),
                 new MyValue('h'),
                 new MyValue('i'),
                 new MyValue('j')
 
-            );
+            ).on("fire", function () {
+                fireCount++;
+            });
             return session.match().then(function () {
-                assert.equal(called, 16);
+                assert.equal(fireCount, 16);
             });
         });
 

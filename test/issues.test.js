@@ -1,9 +1,26 @@
 "use strict";
 var it = require("it"),
     assert = require("assert"),
-    nools = require("../index");
+    nools = require("../index"),
+    GraphNode = require("../lib/nodes/node");
 
 it.describe("issues", function (it) {
+
+    it.describe("dispose shared graph", function (it) {
+
+        it.should("not recurse infinitely when dispose encounters a directed cycle through shared nodes", function () {
+            var a = new GraphNode(),
+                b = new GraphNode(),
+                pattern = {}
+            ;
+            a.addOutNode(b, pattern);
+            b.addOutNode(a, pattern);
+            assert.doesNotThrow(function () {
+                a.dispose();
+            });
+        });
+
+    });
 
     it.describe("62", function (it) {
         it.should("allow rule names with \" character in constraints", function () {
