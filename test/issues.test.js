@@ -1,9 +1,103 @@
 "use strict";
 var it = require("it"),
     assert = require("assert"),
-    nools = require("../index");
+    nools = require("../index"),
+    GraphNode = require("../lib/nodes/node");
 
 it.describe("issues", function (it) {
+
+    // Node.dispose visited map: cycles and diamonds must not blow the stack.
+    it.describe("dispose shared graph", function (it) {
+
+        // Smoke: 2-node cycle must terminate (stack overflow = bug).
+        it.should("not recurse infinitely when dispose encounters a directed cycle through shared nodes", function () {
+            var a = new GraphNode(),
+                b = new GraphNode(),
+                pattern = {}
+            ;
+            a.addOutNode(b, pattern);
+            b.addOutNode(a, pattern);
+            assert.doesNotThrow(function () {
+                a.dispose();
+            });
+        });
+
+        // External visited map: each node exactly once in a large ring.
+        it.should("visit each node in a large directed cycle once (visited map matches graph size)", function () {
+            var n = 250,
+                nodes = [],
+                pattern = {},
+                i
+            ;
+            for (i = 0; i < n; i++) {
+                nodes.push(new GraphNode());
+            }
+            for (i = 0; i < n; i++) {
+                nodes[i].addOutNode(nodes[(i + 1) % n], pattern);
+            }
+            var visited = {};
+            nodes[0].dispose(undefined, visited);
+            assert.equal(Object.keys(visited).length, n);
+            for (i = 0; i < n; i++) {
+                assert.isTrue(visited[nodes[i].__count], "node index " + i + " __count " + nodes[i].__count);
+            }
+        });
+
+        // Wrapper counts entries: ring closure causes one extra call that hits visited[] and returns.
+        it.should("short-circuit when dispose re-enters a node (visited prevents unbounded recursion)", function () {
+            var n = 100,
+                nodes = [],
+                pattern = {},
+                i,
+                originalDispose = GraphNode.prototype.dispose,
+                entries = {}
+            ;
+            GraphNode.prototype.dispose = function (assertable, visited) {
+                var c = this.__count;
+                entries[c] = (entries[c] || 0) + 1;
+                return originalDispose.call(this, assertable, visited);
+            };
+            try {
+                for (i = 0; i < n; i++) {
+                    nodes.push(new GraphNode());
+                }
+                for (i = 0; i < n; i++) {
+                    nodes[i].addOutNode(nodes[(i + 1) % n], pattern);
+                }
+                nodes[0].dispose();
+                var totalCalls = Object.keys(entries).reduce(function (acc, k) {
+                    return acc + entries[k];
+                }, 0);
+                assert.equal(totalCalls, n + 1, "one extra dispose entry when the cycle closes; without visited this never finishes");
+                assert.equal(entries[nodes[0].__count], 2, "start node is entered again and must return immediately");
+                for (i = 1; i < n; i++) {
+                    assert.equal(entries[nodes[i].__count], 1);
+                }
+            } finally {
+                GraphNode.prototype.dispose = originalDispose;
+            }
+        });
+
+        // RootNode-style: two type trees, one visited object; self-edge on shared node.
+        it.should("mark every reachable node when two roots share one visited map (like RootNode.dispose)", function () {
+            var pattern = {},
+                a = new GraphNode(),
+                b = new GraphNode(),
+                shared = new GraphNode()
+            ;
+            a.addOutNode(shared, pattern);
+            b.addOutNode(shared, pattern);
+            shared.addOutNode(shared, pattern);
+            var visited = {};
+            a.dispose(undefined, visited);
+            b.dispose(undefined, visited);
+            assert.equal(Object.keys(visited).length, 3);
+            assert.isTrue(visited[a.__count]);
+            assert.isTrue(visited[b.__count]);
+            assert.isTrue(visited[shared.__count]);
+        });
+
+    });
 
     it.describe("62", function (it) {
         it.should("allow rule names with \" character in constraints", function () {
